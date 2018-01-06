@@ -1,21 +1,28 @@
 #!/usr/bin/python3.5
 
+"""
+Grabs budget information (names and balances) and then sends an email to a list of email addresses.
+Useful if you want to keep someone updated on category balances but they won't regularly
+check the application.
+"""
+# Standard imports
+import datetime
+import pickle
+import os.path
+from collections import defaultdict
+
+# Email Imports
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+# pynYNAB imports
 from pynYNAB.Client import nYnabClient
 from pynYNAB.connection import nYnabConnection
-from pynYNAB.schema.budget import Payee, Transaction
+#from pynYNAB.schema.budget import Payee, Transaction
 
-import datetime
-import pickle
-import os.path
 
 import settings
-
-from collections import defaultdict
-
 
 def sendemail(from_addr, to_addr_list, cc_addr_list,
               subject, message,
