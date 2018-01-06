@@ -5,5 +5,6 @@ Grabs budget information (names and balances) and then sends an email to a list 
 ## Example Email:
 ![Picture of example email](Example_ynab_email.jpg "Example Email")
 
-# Change Log
-7/13/17 - added colors and arrows to show balance change from the previous day.
+# Acknowledgments
+
+This was cloned from https://github.com/jtsmith2 because I thought it was interesting and wanted to play around with python on the YNAB python api created by https://github.com/rienafairefr/pynYNAB.
