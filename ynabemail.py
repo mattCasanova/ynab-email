@@ -48,16 +48,11 @@ class Bal():
 
 
 def main():
-
-    ynabUser = settings.ynab_user
-    ynabPassword = settings.ynab_password
-    ynabBudgetName = settings.ynab_budgetname
-
     print('Getting YNAB info')
 
-    connection = nYnabConnection(ynabUser, ynabPassword)
+    connection = nYnabConnection(settings.YNAB_USER, settings.YNAB_PASSWORD)
     connection.init_session()
-    client = nYnabClient(nynabconnection=connection, budgetname=ynabBudgetName)
+    client = nYnabClient(nynabconnection=connection, budgetname=settings.YNAB_BUDGET_NAME)
 
     cats = {}
     subs = {}
@@ -106,8 +101,14 @@ def main():
 
     print('Sending Email')
 
-    sendemail(settings.from_address, settings.to_list, '',
-              'YNAB Balances for ' + datetime.datetime.now().strftime('%x'), bal_str, settings.gmail_user, settings.gmail_password, 'smtp.gmail.com:587')
+    sendemail(
+        settings.FROM_ADDRESS,
+        settings.TO_LIST, '',
+        'YNAB Balances for ' + datetime.datetime.now().strftime('%x'),
+        bal_str,
+        settings.GMAIL_USER,
+        settings.GMAIL_PASSWORD,
+        'smtp.gmail.com:587')
 
     print('Saving balances')
 
