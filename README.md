@@ -7,4 +7,4 @@ Grabs budget information (names and balances) and then sends an email to a list 
 
 # Acknowledgments
 
-This was cloned from https://github.com/jtsmith2 because I thought it was interesting and wanted to play around with python on the YNAB python api created by https://github.com/rienafairefr/pynYNAB.
+This was forked from https://github.com/jtsmith2 because I thought it was interesting and wanted to play around with python on the YNAB python api created by https://github.com/rienafairefr/pynYNAB
