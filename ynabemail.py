@@ -30,13 +30,13 @@ class BudgetLoader:
     def __init__(self, ynab_user, ynab_password, ynab_budget_name):
         connection = nYnabConnection(ynab_user, ynab_password)
         connection.init_session()
-        self.client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
+        self.__client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
 
         self.balances = self.__load_new_balances()
         self.old_balances = self.__load_old_balances()
+        self.categories, self.subcategories = self.__get_categories_and_subcategories()
 
     def __load_old_balances(self):
-
         if not os.path.isfile('balances.p'):
             return defaultdict(DefaultBalance)
 
@@ -53,7 +53,7 @@ class BudgetLoader:
         balances = defaultdict(DefaultBalance)
         current_year_month = datetime.datetime.now().strftime('%Y-%m')
 
-        for calc in self.client.budget.be_monthly_subcategory_budget_calculations:
+        for calc in self.__client.budget.be_monthly_subcategory_budget_calculations:
             calc_year_month = calc.entities_monthly_subcategory_budget_id[4:11]
             calc_id = calc.entities_monthly_subcategory_budget_id[12:]
 
@@ -63,6 +63,30 @@ class BudgetLoader:
 
         return balances
 
+    def __get_categories_and_subcategories(self):
+        """
+        Creates hiarichy structure of category/subcategory and only those that
+        have the keyword in YNAB subcategory notes section
+        """
+
+        categories = {}
+        subcategories = {}
+
+        for category in self.__client.budget.be_master_categories:
+            categories[category.name] = category
+            subcategories[category.name + '_subs'] = {}
+
+            for subcategory in self.__client.budget.be_subcategories:
+                if subcategory.entities_master_category_id == category.id:
+                    subcategories[category.name + '_subs'][subcategory.name] = subcategory
+
+        return categories, subcategories
+
+    def save_balances(self):
+        """
+        Saves current month balances to a file
+        """
+        pickle.dump(self.balances, open("balances.p", "wb"))
 
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
@@ -102,23 +126,12 @@ def main():
 
     try:
         loader = BudgetLoader(settings.YNAB_USER, settings.YNAB_PASSWORD, settings.YNAB_BUDGET_NAME)
-        client = loader.client
         old_balances = loader.old_balances
         balances = loader.balances
+        cats = loader.categories
+        subs = loader.subcategories
     except NYnabConnectionError:
         return
-
-    cats = {}
-    subs = {}
-
-
-    #Creates hiarichy structure of category/subcategory and only those that have the keyword in YNAB subcategory notes section
-    for cat in client.budget.be_master_categories:
-            cats[cat.name]=cat
-            subs[cat.name+'_subs'] = {}
-            for subcat in client.budget.be_subcategories:
-                    if subcat.entities_master_category_id == cat.id:
-                            subs[cat.name+'_subs'][subcat.name] = subcat
 
     #Displays the balance for each subcategory in the subs dict
     bal_str = '<p>'
@@ -152,8 +165,7 @@ def main():
         'smtp.gmail.com:587')
 
     print('Saving balances')
-
-    pickle.dump( balances, open( "balances.p", "wb" ) )
+    loader.save_balances()
 
 if __name__ == '__main__':
     try:
