@@ -21,18 +21,17 @@ from pynYNAB.Client import nYnabClient
 from pynYNAB.connection import nYnabConnection
 #from pynYNAB.schema.budget import Payee, Transaction
 
-
 import settings
 
-def sendemail(from_addr, to_addr_list, cc_addr_list,
-              subject, message,
-              login, password,
-              smtpserver='smtp.gmail.com:587'):
+def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
+    """
+    Sends the given email message to the list of addresses via an smpt server
+    """
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    msg['From'] = from_addr
-    msg['To'] = ','.join(to_addr_list)
+    msg['From'] = from_address
+    msg['To'] = ','.join(to_address_list)
 
     htmlmessage = '<html><head></head><body>'+message+'</body></html>'
 
@@ -45,7 +44,7 @@ def sendemail(from_addr, to_addr_list, cc_addr_list,
     server = smtplib.SMTP(smtpserver)
     server.starttls()
     server.login(login,password)
-    problems = server.sendmail(from_addr, to_addr_list, msg.as_string())
+    problems = server.sendmail(from_address, to_address_list, msg.as_string())
     server.quit()
     return problems
 
@@ -108,9 +107,9 @@ def main():
 
     print('Sending Email')
 
-    sendemail(
+    send_email(
         settings.FROM_ADDRESS,
-        settings.TO_LIST, '',
+        settings.TO_LIST,
         'YNAB Balances for ' + datetime.datetime.now().strftime('%x'),
         bal_str,
         settings.GMAIL_USER,
