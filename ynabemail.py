@@ -28,6 +28,9 @@ class BudgetLoader:
     Class to simpily loading and organizing our ynab data
     """
     def __init__(self, ynab_user, ynab_password, ynab_budget_name):
+        # Set constants
+        self.__save_file = 'balances.p'
+        
         connection = nYnabConnection(ynab_user, ynab_password)
         connection.init_session()
         self.__client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
@@ -37,10 +40,10 @@ class BudgetLoader:
         self.__categories, self.__subcategories = self.__get_categories_and_subcategories()
 
     def __load_old_balances(self):
-        if not os.path.isfile('balances.p'):
+        if not os.path.isfile(self.__save_file):
             return defaultdict(DefaultBalance)
 
-        old_balances = pickle.load(open("balances.p", "rb"))
+        old_balances = pickle.load(open(self.__save_file, "rb"))
         if not isinstance(old_balances, defaultdict):
             old_balances = defaultdict(DefaultBalance, old_balances)
 
@@ -74,46 +77,53 @@ class BudgetLoader:
 
         for category in self.__client.budget.be_master_categories:
             categories[category.name] = category
-            subcategories[category.name + '_subs'] = {}
+            subcategories[category.name] = {}
 
             for subcategory in self.__client.budget.be_subcategories:
                 if subcategory.entities_master_category_id == category.id:
-                    subcategories[category.name + '_subs'][subcategory.name] = subcategory
+                    subcategories[category.name][subcategory.name] = subcategory
 
         return categories, subcategories
+
+    def __get_styled_diff_string(self, diff):
+        message = ''
+        
+        if diff > 0:
+            message += "&nbsp;&nbsp;<span style='color:green'>$" + str(diff) + "&nbsp;&uarr;</span>"
+        elif diff < 0:
+            message += "&nbsp;&nbsp;<span style='color:red'>$" + str(abs(diff)) + "&nbsp;&darr;</span>"
+
+        return message
 
     def get_email_message(self):
         """
         Displays the balance for each subcategory in an html message
         """
-        
-        bal_str = '<p>'
-        for cat in self.__categories:
-            
-            if 'Internal' not in cat:
-                if len(self.__subcategories[cat+'_subs'])>0:
-                    bal_str += '<b>'+cat+'</b> <br>'
-                    for scat in self.__subcategories[cat+"_subs"]:
-                        #print(cat + ' - ' + scat)
-                        bal_str += '&nbsp;&nbsp;&nbsp;&nbsp;'+ scat + ': ' + str(self.__balances[self.__subcategories[cat+"_subs"][scat].id].balance)
-                        bal_diff = self.__balances[self.__subcategories[cat+"_subs"][scat].id].balance - self.__old_balances[self.__subcategories[cat+"_subs"][scat].id].balance
-                        bal_diff = round(bal_diff,2)
-                           
-                        if bal_diff > 0:
-                            #Balance goes up
-                            bal_str += "&nbsp;&nbsp;<span style='color:green'>$" + str(bal_diff) + "&nbsp;&uarr;</span>"
-                        elif bal_diff < 0:
-                            #Balance went down
-                            bal_str += "&nbsp;&nbsp;<span style='color:red'>$" + str(abs(bal_diff)) + "&nbsp;&darr;</span>"
-                        bal_str += '<br>'
 
-        return bal_str
+        message = '<p>'
+        for cat_name in self.__categories:
+            if 'Internal' in cat_name or not self.__subcategories[cat_name]:
+                continue
+
+            message += '<b>' + cat_name + '</b> <br>'
+            for sub_name in self.__subcategories[cat_name]:
+
+                sub_id = self.__subcategories[cat_name][sub_name].id
+                new_balance = self.__balances[sub_id].balance
+                old_balance = self.__old_balances[sub_id].balance
+                diff = new_balance - old_balance
+
+                message += '&nbsp;&nbsp;&nbsp;&nbsp;'+ sub_name + ': ' + str(new_balance)
+                message += self.__get_styled_diff_string(diff)
+                message += '<br>'
+
+        return message
 
     def save_balances(self):
         """
         Saves current month balances to a file
         """
-        pickle.dump(self.__balances, open("balances.p", "wb"))
+        pickle.dump(self.__balances, open(self.__save_file, "wb"))
 
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
