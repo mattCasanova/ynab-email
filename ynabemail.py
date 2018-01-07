@@ -32,6 +32,37 @@ class BudgetLoader:
         connection.init_session()
         self.client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
 
+        self.balances = self.__load_new_balances()
+        self.old_balances = self.__load_old_balances()
+
+    def __load_old_balances(self):
+
+        if not os.path.isfile('balances.p'):
+            return defaultdict(DefaultBalance)
+
+        old_balances = pickle.load(open("balances.p", "rb"))
+        if not isinstance(old_balances, defaultdict):
+            old_balances = defaultdict(DefaultBalance, old_balances)
+
+        return old_balances
+
+    def __load_new_balances(self):
+        """
+        Gets current month budget calculations
+        """
+        balances = defaultdict(DefaultBalance)
+        current_year_month = datetime.datetime.now().strftime('%Y-%m')
+
+        for calc in self.client.budget.be_monthly_subcategory_budget_calculations:
+            calc_year_month = calc.entities_monthly_subcategory_budget_id[4:11]
+            calc_id = calc.entities_monthly_subcategory_budget_id[12:]
+
+            if calc_year_month == current_year_month:
+                balances[calc_id] = calc
+                #print(b.entities_monthly_subcategory_budget_id[12:]+': ' + str(b.balance))
+
+        return balances
+
 
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
@@ -69,24 +100,17 @@ class DefaultBalance():
 def main():
     print('Getting YNAB info')
 
-    loader = None
-    client = None
     try:
         loader = BudgetLoader(settings.YNAB_USER, settings.YNAB_PASSWORD, settings.YNAB_BUDGET_NAME)
         client = loader.client
+        old_balances = loader.old_balances
+        balances = loader.balances
     except NYnabConnectionError:
         return
 
     cats = {}
     subs = {}
-    balances = defaultdict(DefaultBalance)
 
-    if os.path.isfile('balances.p'):
-        old_balances = pickle.load( open( "balances.p", "rb" ) )
-        if type(old_balances) is not defaultdict:
-            old_balances = defaultdict(DefaultBalance, old_balances)
-    else:
-        old_balances = defaultdict(DefaultBalance)
 
     #Creates hiarichy structure of category/subcategory and only those that have the keyword in YNAB subcategory notes section
     for cat in client.budget.be_master_categories:
@@ -95,12 +119,6 @@ def main():
             for subcat in client.budget.be_subcategories:
                     if subcat.entities_master_category_id == cat.id:
                             subs[cat.name+'_subs'][subcat.name] = subcat
-
-    #Gets current month budget calculations
-    for b in client.budget.be_monthly_subcategory_budget_calculations:
-            if b.entities_monthly_subcategory_budget_id[4:11]==(datetime.datetime.now().strftime('%Y-%m')):
-                    balances[b.entities_monthly_subcategory_budget_id[12:]]=b
-                    #print(b.entities_monthly_subcategory_budget_id[12:]+': ' + str(b.balance))
 
     #Displays the balance for each subcategory in the subs dict
     bal_str = '<p>'
