@@ -32,9 +32,9 @@ class BudgetLoader:
         connection.init_session()
         self.__client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
 
-        self.balances = self.__load_new_balances()
-        self.old_balances = self.__load_old_balances()
-        self.categories, self.subcategories = self.__get_categories_and_subcategories()
+        self.__balances = self.__load_new_balances()
+        self.__old_balances = self.__load_old_balances()
+        self.__categories, self.__subcategories = self.__get_categories_and_subcategories()
 
     def __load_old_balances(self):
         if not os.path.isfile('balances.p'):
@@ -82,11 +82,38 @@ class BudgetLoader:
 
         return categories, subcategories
 
+    def get_email_message(self):
+        """
+        Displays the balance for each subcategory in an html message
+        """
+        
+        bal_str = '<p>'
+        for cat in self.__categories:
+            
+            if 'Internal' not in cat:
+                if len(self.__subcategories[cat+'_subs'])>0:
+                    bal_str += '<b>'+cat+'</b> <br>'
+                    for scat in self.__subcategories[cat+"_subs"]:
+                        #print(cat + ' - ' + scat)
+                        bal_str += '&nbsp;&nbsp;&nbsp;&nbsp;'+ scat + ': ' + str(self.__balances[self.__subcategories[cat+"_subs"][scat].id].balance)
+                        bal_diff = self.__balances[self.__subcategories[cat+"_subs"][scat].id].balance - self.__old_balances[self.__subcategories[cat+"_subs"][scat].id].balance
+                        bal_diff = round(bal_diff,2)
+                           
+                        if bal_diff > 0:
+                            #Balance goes up
+                            bal_str += "&nbsp;&nbsp;<span style='color:green'>$" + str(bal_diff) + "&nbsp;&uarr;</span>"
+                        elif bal_diff < 0:
+                            #Balance went down
+                            bal_str += "&nbsp;&nbsp;<span style='color:red'>$" + str(abs(bal_diff)) + "&nbsp;&darr;</span>"
+                        bal_str += '<br>'
+
+        return bal_str
+
     def save_balances(self):
         """
         Saves current month balances to a file
         """
-        pickle.dump(self.balances, open("balances.p", "wb"))
+        pickle.dump(self.__balances, open("balances.p", "wb"))
 
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
@@ -126,32 +153,9 @@ def main():
 
     try:
         loader = BudgetLoader(settings.YNAB_USER, settings.YNAB_PASSWORD, settings.YNAB_BUDGET_NAME)
-        old_balances = loader.old_balances
-        balances = loader.balances
-        cats = loader.categories
-        subs = loader.subcategories
+        message = loader.get_email_message()
     except NYnabConnectionError:
         return
-
-    #Displays the balance for each subcategory in the subs dict
-    bal_str = '<p>'
-    for cat in cats:
-        if 'Internal' not in cat:
-            if len(subs[cat+'_subs'])>0:
-                    bal_str += '<b>'+cat+'</b> <br>'
-                    for scat in subs[cat+"_subs"]:
-                            #print(cat + ' - ' + scat)
-                            bal_str += '&nbsp;&nbsp;&nbsp;&nbsp;'+ scat + ': ' + str(balances[subs[cat+"_subs"][scat].id].balance)
-                            bal_diff = balances[subs[cat+"_subs"][scat].id].balance - old_balances[subs[cat+"_subs"][scat].id].balance
-                            bal_diff = round(bal_diff,2)
-                            if bal_diff:
-                                if bal_diff > 0:
-                                    #Balance goes up
-                                    bal_str += "&nbsp;&nbsp;<span style='color:green'>$" + str(bal_diff) + "&nbsp;&uarr;</span>"
-                                else:
-                                    #Balance went down
-                                    bal_str += "&nbsp;&nbsp;<span style='color:red'>$" + str(abs(bal_diff)) + "&nbsp;&darr;</span>"
-                            bal_str += '<br>'
 
     print('Sending Email')
 
@@ -159,7 +163,7 @@ def main():
         settings.FROM_ADDRESS,
         settings.TO_LIST,
         'YNAB Balances for ' + datetime.datetime.now().strftime('%x'),
-        bal_str,
+        message,
         settings.GMAIL_USER,
         settings.GMAIL_PASSWORD,
         'smtp.gmail.com:587')
