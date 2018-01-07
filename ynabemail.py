@@ -18,10 +18,21 @@ from email.mime.text import MIMEText
 
 # pynYNAB imports
 from pynYNAB.Client import nYnabClient
-from pynYNAB.connection import nYnabConnection
+from pynYNAB.connection import nYnabConnection, NYnabConnectionError
 #from pynYNAB.schema.budget import Payee, Transaction
 
 import settings
+
+class BudgetLoader:
+    """
+    Class to simpily loading and organizing our ynab data
+    """
+    def __init__(self, ynab_user, ynab_password, ynab_budget_name):
+        connection = nYnabConnection(ynab_user, ynab_password)
+        connection.init_session()
+        self.client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
+
+
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
     """
@@ -48,28 +59,34 @@ def send_email(from_address, to_address_list, subject, message, login, password,
     server.quit()
     return problems
 
-class Bal():
-
+class DefaultBalance():
+    """
+    Used as default values for old balances when the value doesn't exist in the dictionary.
+    """
     balance = 0
 
 
 def main():
     print('Getting YNAB info')
 
-    connection = nYnabConnection(settings.YNAB_USER, settings.YNAB_PASSWORD)
-    connection.init_session()
-    client = nYnabClient(nynabconnection=connection, budgetname=settings.YNAB_BUDGET_NAME)
+    loader = None
+    client = None
+    try:
+        loader = BudgetLoader(settings.YNAB_USER, settings.YNAB_PASSWORD, settings.YNAB_BUDGET_NAME)
+        client = loader.client
+    except NYnabConnectionError:
+        return
 
     cats = {}
     subs = {}
-    balances = defaultdict(Bal)
+    balances = defaultdict(DefaultBalance)
 
     if os.path.isfile('balances.p'):
         old_balances = pickle.load( open( "balances.p", "rb" ) )
         if type(old_balances) is not defaultdict:
-            old_balances = defaultdict(Bal, old_balances)
+            old_balances = defaultdict(DefaultBalance, old_balances)
     else:
-        old_balances = defaultdict(Bal)
+        old_balances = defaultdict(DefaultBalance)
 
     #Creates hiarichy structure of category/subcategory and only those that have the keyword in YNAB subcategory notes section
     for cat in client.budget.be_master_categories:
