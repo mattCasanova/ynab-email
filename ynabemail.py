@@ -9,7 +9,6 @@ check the application.
 import datetime
 import pickle
 import os.path
-from collections import defaultdict
 
 # Email Imports
 import smtplib
@@ -30,7 +29,8 @@ class BudgetLoader:
     def __init__(self, ynab_user, ynab_password, ynab_budget_name):
         # Set constants
         self.__save_file = 'balances.p'
-        
+        self.__money_format = '${:,.2f}'
+
         connection = nYnabConnection(ynab_user, ynab_password)
         connection.init_session()
         self.__client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
@@ -41,11 +41,11 @@ class BudgetLoader:
 
     def __load_old_balances(self):
         if not os.path.isfile(self.__save_file):
-            return defaultdict(DefaultBalance)
+            return dict()
 
         old_balances = pickle.load(open(self.__save_file, "rb"))
-        if not isinstance(old_balances, defaultdict):
-            old_balances = defaultdict(DefaultBalance, old_balances)
+        #if not isinstance(old_balances, defaultdict):
+         #   old_balances = defaultdict(old_balances)
 
         return old_balances
 
@@ -53,7 +53,7 @@ class BudgetLoader:
         """
         Gets current month budget calculations
         """
-        balances = defaultdict(DefaultBalance)
+        balances = dict()
         current_year_month = datetime.datetime.now().strftime('%Y-%m')
 
         for calc in self.__client.budget.be_monthly_subcategory_budget_calculations:
@@ -86,16 +86,20 @@ class BudgetLoader:
         return categories, subcategories
 
     def __get_styled_diff_string(self, diff):
-        message = ''
-        
-        if diff > 0:
-            message += "&nbsp;&nbsp;<span style='color:green'>$" + str(diff) + "&nbsp;&uarr;</span>"
-        elif diff < 0:
-            message += "&nbsp;&nbsp;<span style='color:red'>$" + str(abs(diff)) + "&nbsp;&darr;</span>"
+        if diff == 0:
+            return ''
 
-        return message
+        color = 'green'
+        direction = '&uarr;'
+        message = "&nbsp;&nbsp;<span style='color:{}'>{}&nbsp;{}</span>"
 
-    def get_email_message(self):
+        if diff < 0:
+            color = 'red'
+            direction = '&darr;'
+
+        return message.format(color, self.__money_format.format(diff), direction)
+
+    def create_email_body(self):
         """
         Displays the balance for each subcategory in an html message
         """
@@ -109,12 +113,15 @@ class BudgetLoader:
             for sub_name in self.__subcategories[cat_name]:
 
                 sub_id = self.__subcategories[cat_name][sub_name].id
-                new_balance = self.__balances[sub_id].balance
-                old_balance = self.__old_balances[sub_id].balance
-                diff = new_balance - old_balance
 
-                message += '&nbsp;&nbsp;&nbsp;&nbsp;'+ sub_name + ': ' + str(new_balance)
-                message += self.__get_styled_diff_string(diff)
+                obj = self.__old_balances.get(sub_id)
+                old_balance = obj.balance if obj else 0
+                new_balance = self.__balances.get(sub_id).balance
+
+                message += '&nbsp;&nbsp;&nbsp;&nbsp;'
+                message += sub_name + ': '
+                message += self.__money_format.format(new_balance)
+                message += self.__get_styled_diff_string(new_balance - old_balance)
                 message += '<br>'
 
         return message
@@ -124,7 +131,6 @@ class BudgetLoader:
         Saves current month balances to a file
         """
         pickle.dump(self.__balances, open(self.__save_file, "wb"))
-
 
 def send_email(from_address, to_address_list, subject, message, login, password, smtpserver):
     """
@@ -146,24 +152,17 @@ def send_email(from_address, to_address_list, subject, message, login, password,
 
     server = smtplib.SMTP(smtpserver)
     server.starttls()
-    server.login(login,password)
+    server.login(login, password)
     problems = server.sendmail(from_address, to_address_list, msg.as_string())
     server.quit()
     return problems
-
-class DefaultBalance():
-    """
-    Used as default values for old balances when the value doesn't exist in the dictionary.
-    """
-    balance = 0
-
 
 def main():
     print('Getting YNAB info')
 
     try:
         loader = BudgetLoader(settings.YNAB_USER, settings.YNAB_PASSWORD, settings.YNAB_BUDGET_NAME)
-        message = loader.get_email_message()
+        message = loader.create_email_body()
     except NYnabConnectionError:
         return
 
