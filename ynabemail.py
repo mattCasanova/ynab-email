@@ -18,7 +18,6 @@ from email.mime.text import MIMEText
 # pynYNAB imports
 from pynYNAB.Client import nYnabClient
 from pynYNAB.connection import nYnabConnection, NYnabConnectionError
-#from pynYNAB.schema.budget import Payee, Transaction
 
 import settings
 
@@ -34,6 +33,7 @@ class BudgetLoader:
         connection = nYnabConnection(ynab_user, ynab_password)
         connection.init_session()
         self.__client = nYnabClient(nynabconnection=connection, budgetname=ynab_budget_name)
+        self.__client.sync()
 
         self.__balances = self.__load_new_balances()
         self.__old_balances = self.__load_old_balances()
@@ -44,9 +44,6 @@ class BudgetLoader:
             return dict()
 
         old_balances = pickle.load(open(self.__save_file, "rb"))
-        #if not isinstance(old_balances, defaultdict):
-         #   old_balances = defaultdict(old_balances)
-
         return old_balances
 
     def __load_new_balances(self):
@@ -62,7 +59,6 @@ class BudgetLoader:
 
             if calc_year_month == current_year_month:
                 balances[calc_id] = calc
-                #print(b.entities_monthly_subcategory_budget_id[12:]+': ' + str(b.balance))
 
         return balances
 
